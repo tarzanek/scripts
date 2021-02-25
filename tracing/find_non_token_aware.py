@@ -15,6 +15,7 @@ cqlsh -e "COPY system_traces.sessions (session_id,client,command,coordinator,dur
 ''')
 argp.add_argument('--sessions', help='CSV file with contents of system_traces.sessions content')
 argp.add_argument('--events', help='CSV file with contents of system_traces.events content')
+argp.add_argument('--delimiter', help='CSV file delimiter', default=";")
 
 args = argp.parse_args()
 if not args.sessions or not args.events:
@@ -24,11 +25,12 @@ sessionid_to_coordinator = {}
 sessionid_to_query = {}
 sessionid_to_events = {}
 sessionid_to_natural_endpoints = {}
+delimiter = args.delimiter
 
 # Map sessionid to events
 with open(args.events) as efile:
     for line in efile:
-        sid = line.split(",")[0]
+        sid = line.split(delimiter)[0]
         if sid in sessionid_to_events:
             sessionid_to_events[sid].append(line)
         else:
@@ -38,7 +40,7 @@ with open(args.events) as efile:
 query_pattern = re.compile(".*\'query\'\: \'(.*)\'.*")
 with open(args.sessions) as sfile:
     for line in sfile:
-        line_split = line.split(",")
+        line_split = line.split(delimiter)
         sid = line_split[0]
         coordinator = line_split[3]
         sessionid_to_coordinator[sid] = coordinator
@@ -47,22 +49,25 @@ with open(args.sessions) as sfile:
         if res:
             sessionid_to_query[sid] = res.group(1).split("'")[0]
         else: 
-            sys.exit("No query for {}".format(sid))
+            # sys.exit("No query for {}".format(sid))
+            print("warning: No query for {} (batch?)".format(sid))
 
 # Map sessionid to replicas
 for sid, lines in sessionid_to_events.items():
     for line in lines:
         if re.search("Creating write handler for token", line):
+            # Natural endpoints are represented in the trace as a coma separated list in {}
             natural = line.split(":")[2].split("}")[0].split("{")[1].split(",")
             natural = [ s.strip() for s in natural ]
 
             sessionid_to_natural_endpoints[sid] = natural
 
         if re.search("Creating read executor for token", line):
+            # Natural endpoints are represented in the trace as a coma separated list in {}
             natural = line.split(":")[1].split("}")[0].split("{")[1].split(",")
             sessionid_to_natural_endpoints[sid] = natural
 
 for sid, coordinator in sessionid_to_coordinator.items():
-    if sid in sessionid_to_natural_endpoints and not coordinator in sessionid_to_natural_endpoints[sid]:
+    if sid in sessionid_to_natural_endpoints and not coordinator in sessionid_to_natural_endpoints[sid] and sid in sessionid_to_query:
         print("{} is not token aware: {}".format(sid, sessionid_to_query[sid]))
         
