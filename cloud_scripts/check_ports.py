@@ -10,14 +10,16 @@ argp = argparse.ArgumentParser(description = "Check that given ports are open on
 '''
 Tries to connect to the given set of TCP ports on given addresses set.
 ''')
-argp.add_argument('--remote-address', help='remote addresses list', default=[], action='append', dest='remote_address_set')
-argp.add_argument('--port', help='Remote ports to check', default=[], action='append', dest='ports_set')
+argp.add_argument('-r','--remote-address', help='remote addresses list', default=[], action='append', dest='remote_address_set')
+argp.add_argument('-p','--port', help='Remote ports to check', default=[], action='append', dest='ports_set')
+argp.add_argument('-t','--timeout', help='timeout for making the connection', default=2, action='store', type=int, dest='timeout')
 
 args = argp.parse_args()
 
 # Remote duplicates
 remote_address_set = set(args.remote_address_set)
 ports_set = set(args.ports_set)
+timeout = args.timeout
 checked = False
 success = True
 
@@ -30,6 +32,7 @@ for addr in remote_address_set:
         print("  Checking port {}".format(port))
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(timeout)
             s.connect((addr, int(port)))
             print("  {}:{} is ok".format(addr, port))
             s.shutdown(socket.SHUT_RDWR)
